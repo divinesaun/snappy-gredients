@@ -222,9 +222,6 @@ def process_image(image):
     if error:
         st.error(error)
         return
-        
-    st.subheader("📝 Extracted Text")
-    st.text_area("Text Output", extracted_text, height=150)
     
     if extracted_text and extracted_text.strip():
         st.subheader("🔬 Analysis")
