@@ -113,7 +113,7 @@ Upload an image or take a photo of the ingredients list, and we'll analyze it fo
 """)
 
 # Create tabs for different input methods
-tab1, tab2 = st.tabs(["📸 Take Photo", "📤 Upload Image"])
+tab1, tab2 = st.tabs(["📤 Upload Image", "📸 Take Photo"])
 
 def analyze_ingredients(text):
     if not text.strip():
@@ -164,7 +164,7 @@ def process_image(image):
         st.warning("No text was detected in the image. Please try again with a clearer image.")
 
 # Camera tab
-with tab1:
+with tab2:
     st.subheader("Take a Photo")
     img_file_buffer = st.camera_input("Take a picture of the ingredients list")
     
@@ -173,7 +173,7 @@ with tab1:
         process_image(image)
 
 # Upload tab
-with tab2:
+with tab1:
     st.subheader("Upload an Image")
     uploaded_file = st.file_uploader("Choose an image file", type=["png", "jpg", "jpeg"])
     
