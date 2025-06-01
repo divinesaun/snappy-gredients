@@ -18,6 +18,46 @@ genai.configure(api_key=GOOGLE_API_KEY)
 # Initialize Gemini model
 model = genai.GenerativeModel("gemini-2.0-flash")
 
+def compress_image(image, max_size_mb=1):
+    """Compress image to be under max_size_mb"""
+    # Convert to RGB if image is in RGBA mode
+    if image.mode == 'RGBA':
+        image = image.convert('RGB')
+    
+    # Start with high quality
+    quality = 95
+    output = io.BytesIO()
+    
+    # Save with initial quality
+    image.save(output, format='JPEG', quality=quality)
+    size = output.tell() / (1024 * 1024)  # Size in MB
+    
+    # If image is already under max_size_mb, return as is
+    if size <= max_size_mb:
+        output.seek(0)
+        return Image.open(output)
+    
+    # Binary search for the right quality
+    min_quality = 5
+    max_quality = 95
+    
+    while min_quality <= max_quality:
+        quality = (min_quality + max_quality) // 2
+        output = io.BytesIO()
+        image.save(output, format='JPEG', quality=quality)
+        size = output.tell() / (1024 * 1024)
+        
+        if size <= max_size_mb:
+            min_quality = quality + 1
+        else:
+            max_quality = quality - 1
+    
+    # Use the last quality that worked
+    output = io.BytesIO()
+    image.save(output, format='JPEG', quality=max_quality)
+    output.seek(0)
+    return Image.open(output)
+
 def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
     if not api_key:
         return None, "OCR Space API key is not configured. Please check your environment variables."
@@ -103,8 +143,11 @@ def analyze_ingredients(text):
         return f"Error analyzing ingredients: {str(e)}"
 
 def process_image(image):
+    # Compress image if needed
+    compressed_image = compress_image(image)
+    
     with st.spinner("Extracting text..."):
-        extracted_text, error = ocr_space_file(image)
+        extracted_text, error = ocr_space_file(compressed_image)
     
     if error:
         st.error(error)
@@ -136,7 +179,7 @@ with tab2:
     
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_column_width=True)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
         process_image(image)
 
 # Add footer
