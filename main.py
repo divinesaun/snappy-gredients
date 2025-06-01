@@ -64,22 +64,50 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
         
     url = 'https://api.ocr.space/parse/image'
     
-    # Convert PIL Image to bytes with compression
-    img_byte_arr = io.BytesIO()
-    # Convert to RGB if needed
-    if image_data.mode == 'RGBA':
-        image_data = image_data.convert('RGB')
-    # Save with compression
-    image_data.save(img_byte_arr, format='JPEG', quality=85, optimize=True)
-    img_byte_arr = img_byte_arr.getvalue()
-    
-    # Check file size
-    size_mb = len(img_byte_arr) / (1024 * 1024)
-    if size_mb > 1:
-        # If still too large, try more aggressive compression
+    def compress_image_to_size(image, max_size_mb=1):
+        """Compress image to be under max_size_mb"""
+        # Convert to RGB if needed
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+            
+        # Start with high quality
+        quality = 95
+        min_quality = 5
+        max_quality = 95
+        
+        while min_quality <= max_quality:
+            # Calculate current quality
+            quality = (min_quality + max_quality) // 2
+            
+            # Save with current quality
+            img_byte_arr = io.BytesIO()
+            image.save(img_byte_arr, format='JPEG', quality=quality, optimize=True)
+            size_mb = len(img_byte_arr.getvalue()) / (1024 * 1024)
+            
+            if size_mb <= max_size_mb:
+                # If we're under the size limit, try to increase quality
+                min_quality = quality + 1
+            else:
+                # If we're over the size limit, decrease quality
+                max_quality = quality - 1
+                
+            # If we've found a working quality, return the compressed image
+            if size_mb <= max_size_mb:
+                img_byte_arr.seek(0)
+                return img_byte_arr.getvalue()
+        
+        # If we get here, try one last time with minimum quality
         img_byte_arr = io.BytesIO()
-        image_data.save(img_byte_arr, format='JPEG', quality=60, optimize=True)
-        img_byte_arr = img_byte_arr.getvalue()
+        image.save(img_byte_arr, format='JPEG', quality=5, optimize=True)
+        return img_byte_arr.getvalue()
+    
+    # Compress the image
+    compressed_image = compress_image_to_size(image_data)
+    
+    # Verify the size
+    size_mb = len(compressed_image) / (1024 * 1024)
+    if size_mb > 1:
+        return None, f"Unable to compress image below 1MB. Current size: {size_mb:.2f}MB"
     
     # Prepare the request
     payload = {
@@ -94,7 +122,7 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
     }
     
     files = {
-        'file': ('image.jpg', img_byte_arr, 'image/jpeg')
+        'file': ('image.jpg', compressed_image, 'image/jpeg')
     }
     
     try:
@@ -108,12 +136,12 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
             files=files,
             data=payload,
             headers=headers,
-            timeout=30  # Add timeout
+            timeout=30
         )
         
         # Print response for debugging
         print(f"Response status: {response.status_code}")
-        print(f"Response content: {response.text[:200]}")  # Print first 200 chars of response
+        print(f"Response content: {response.text[:200]}")
         
         response.raise_for_status()
         result = response.json()
