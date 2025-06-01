@@ -25,7 +25,7 @@ An AI-powered ingredient analyzer that helps you understand what's in your food.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/snappy-gredients.git
+git clone [https://github.com/yourusername/snappy-gredients.git](https://github.com/divinesaun/snappy-gredients.git)
 cd snappy-gredients
 ```
 
