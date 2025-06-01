@@ -63,21 +63,36 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
         return None, "OCR Space API key is not configured. Please check your environment variables."
         
     url = 'https://api.ocr.space/parse/image'
+    
+    # Convert PIL Image to bytes with compression
+    img_byte_arr = io.BytesIO()
+    # Convert to RGB if needed
+    if image_data.mode == 'RGBA':
+        image_data = image_data.convert('RGB')
+    # Save with compression
+    image_data.save(img_byte_arr, format='JPEG', quality=85, optimize=True)
+    img_byte_arr = img_byte_arr.getvalue()
+    
+    # Check file size
+    size_mb = len(img_byte_arr) / (1024 * 1024)
+    if size_mb > 1:
+        # If still too large, try more aggressive compression
+        img_byte_arr = io.BytesIO()
+        image_data.save(img_byte_arr, format='JPEG', quality=60, optimize=True)
+        img_byte_arr = img_byte_arr.getvalue()
+    
+    files = {
+        'file': ('image.jpg', img_byte_arr, 'image/jpeg')
+    }
+    
     payload = {
         'apikey': api_key,
         'language': language,
         'isOverlayRequired': False,
         'detectOrientation': True,
-        'OCREngine': 2  # Using OCR Engine 2 for better accuracy
-    }
-    
-    # Convert PIL Image to bytes
-    img_byte_arr = io.BytesIO()
-    image_data.save(img_byte_arr, format='PNG')
-    img_byte_arr = img_byte_arr.getvalue()
-    
-    files = {
-        'file': ('image.png', img_byte_arr, 'image/png')
+        'OCREngine': 2,  # Using OCR Engine 2 for better accuracy
+        'scale': True,  # Enable scaling for better OCR
+        'isTable': False
     }
     
     try:
