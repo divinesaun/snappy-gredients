@@ -19,6 +19,9 @@ genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel("gemini-2.0-flash")
 
 def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
+    if not api_key:
+        return None, "OCR Space API key is not configured. Please check your environment variables."
+        
     url = 'https://api.ocr.space/parse/image'
     payload = {
         'apikey': api_key,
@@ -48,6 +51,10 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
             return None, "No text was detected in the image."
             
         return result['ParsedResults'][0]['ParsedText'], None
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 403:
+            return None, "Authentication failed. Please check if your OCR Space API key is valid and properly configured."
+        return None, f"HTTP Error: {str(e)}"
     except Exception as e:
         return None, f"Error processing image: {str(e)}"
 
