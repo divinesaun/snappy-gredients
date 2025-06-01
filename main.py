@@ -54,11 +54,11 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
 # Set page config
 st.set_page_config(
     page_title="Snappy Gredients - Ingredient Analyzer",
-    page_icon="🔍",
+    page_icon="🥣",
     layout="wide"
 )
 
-st.title("🔍 Snappy Gredients - Ingredient Analyzer")
+st.title("🥣 Snappy Gredients - Ingredient Analyzer")
 st.markdown("""
 This tool helps you understand the ingredients in your food products. 
 Upload an image or take a photo of the ingredients list, and we'll analyze it for you!
