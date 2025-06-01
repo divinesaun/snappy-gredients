@@ -1,23 +1,55 @@
 # app.py
 import streamlit as st
 from PIL import Image
-import pytesseract
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+import requests
+import io
 
 # Load environment variables
 load_dotenv()
 
 # Configure Gemini API
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+OCR_SPACE_API_KEY = os.getenv('OCR_SPACE_API_KEY')
 genai.configure(api_key=GOOGLE_API_KEY)
 
 # Initialize Gemini model
-model = genai.GenerativeModel('gemini-pro')
+model = genai.GenerativeModel("gemini-2.0-flash")
 
-# Optional: specify tesseract path manually (mainly for Windows)
-pytesseract.pytesseract.tesseract_cmd = r"C:\Users\divin\AppData\Local\Programs\Tesseract-OCR\tesseract.exe"
+def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
+    url = 'https://api.ocr.space/parse/image'
+    payload = {
+        'apikey': api_key,
+        'language': language,
+        'isOverlayRequired': False,
+        'OCREngine': 2  # Using OCR Engine 2 for better accuracy
+    }
+    
+    # Convert PIL Image to bytes
+    img_byte_arr = io.BytesIO()
+    image_data.save(img_byte_arr, format='PNG')
+    img_byte_arr = img_byte_arr.getvalue()
+    
+    files = {
+        'file': ('image.png', img_byte_arr, 'image/png')
+    }
+    
+    try:
+        response = requests.post(url, files=files, data=payload)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        result = response.json()
+        
+        if result['IsErroredOnProcessing']:
+            return None, f"Error: {result['ErrorMessage']}"
+            
+        if not result['ParsedResults']:
+            return None, "No text was detected in the image."
+            
+        return result['ParsedResults'][0]['ParsedText'], None
+    except Exception as e:
+        return None, f"Error processing image: {str(e)}"
 
 # Set page config
 st.set_page_config(
@@ -64,12 +96,16 @@ def analyze_ingredients(text):
 
 def process_image(image):
     with st.spinner("Extracting text..."):
-        extracted_text = pytesseract.image_to_string(image)
+        extracted_text, error = ocr_space_file(image)
     
+    if error:
+        st.error(error)
+        return
+        
     st.subheader("📝 Extracted Text")
     st.text_area("Text Output", extracted_text, height=150)
     
-    if extracted_text.strip():
+    if extracted_text and extracted_text.strip():
         st.subheader("🔬 Analysis")
         analysis = analyze_ingredients(extracted_text)
         st.markdown(analysis)
