@@ -81,36 +81,63 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
         image_data.save(img_byte_arr, format='JPEG', quality=60, optimize=True)
         img_byte_arr = img_byte_arr.getvalue()
     
-    files = {
-        'file': ('image.jpg', img_byte_arr, 'image/jpeg')
-    }
-    
+    # Prepare the request
     payload = {
         'apikey': api_key,
         'language': language,
         'isOverlayRequired': False,
         'detectOrientation': True,
-        'OCREngine': 2,  # Using OCR Engine 2 for better accuracy
-        'scale': True,  # Enable scaling for better OCR
-        'isTable': False
+        'OCREngine': 2,
+        'scale': True,
+        'isTable': False,
+        'filetype': 'jpg'
+    }
+    
+    files = {
+        'file': ('image.jpg', img_byte_arr, 'image/jpeg')
     }
     
     try:
-        response = requests.post(url, files=files, data=payload)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        # Add headers to specify content type
+        headers = {
+            'apikey': api_key
+        }
+        
+        response = requests.post(
+            url,
+            files=files,
+            data=payload,
+            headers=headers,
+            timeout=30  # Add timeout
+        )
+        
+        # Print response for debugging
+        print(f"Response status: {response.status_code}")
+        print(f"Response content: {response.text[:200]}")  # Print first 200 chars of response
+        
+        response.raise_for_status()
         result = response.json()
         
-        if result['IsErroredOnProcessing']:
-            return None, f"Error: {result['ErrorMessage']}"
+        if result.get('IsErroredOnProcessing'):
+            error_message = result.get('ErrorMessage', 'Unknown error occurred')
+            return None, f"Error: {error_message}"
             
-        if not result['ParsedResults']:
+        if not result.get('ParsedResults'):
             return None, "No text was detected in the image."
             
         return result['ParsedResults'][0]['ParsedText'], None
+        
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 403:
-            return None, "Authentication failed. Please check if your OCR Space API key is valid and properly configured."
-        return None, f"HTTP Error: {str(e)}"
+        error_msg = f"HTTP Error: {str(e)}"
+        if e.response is not None:
+            try:
+                error_data = e.response.json()
+                error_msg = f"API Error: {error_data.get('ErrorMessage', str(e))}"
+            except:
+                error_msg = f"HTTP Error {e.response.status_code}: {str(e)}"
+        return None, error_msg
+    except requests.exceptions.RequestException as e:
+        return None, f"Request Error: {str(e)}"
     except Exception as e:
         return None, f"Error processing image: {str(e)}"
 
