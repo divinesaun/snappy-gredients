@@ -27,6 +27,7 @@ def ocr_space_file(image_data, api_key=OCR_SPACE_API_KEY, language='eng'):
         'apikey': api_key,
         'language': language,
         'isOverlayRequired': False,
+        'detectOrientation': True,
         'OCREngine': 2  # Using OCR Engine 2 for better accuracy
     }
     
