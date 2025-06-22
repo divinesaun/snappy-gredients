@@ -1046,7 +1046,6 @@ def show_exercise_tracker():
             st.success("Exercise logged!")
 
 def show_image_analysis():
-    st.subheader("📸 Snap and Analyze")
     image_type = st.selectbox("Select Image Type", ["Ingredients List", "Nutrition Facts Table"])
     uploaded_file = st.file_uploader("Upload image", type=['png', 'jpg', 'jpeg'])
     
