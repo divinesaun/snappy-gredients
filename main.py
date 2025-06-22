@@ -618,6 +618,14 @@ def parse_ingredients_from_text(text):
         return ingredients
     return []
 
+def compress_image(image_file, max_size=(800, 800), quality=70):
+    image = Image.open(image_file)
+    image.thumbnail(max_size)
+    buf = io.BytesIO()
+    image.save(buf, format='JPEG', quality=quality, optimize=True)
+    buf.seek(0)
+    return buf
+
 # Initialize database
 init_database()
 
@@ -696,7 +704,7 @@ def show_main_interface():
         "🍔 Quick Bite Log",
         "💪 Move & Burn",
         "📸 Snap and Analyze",
-        "🕒 My Food Story",
+        "🕒 My Log Timeline",
         "🤖 Chat with Snappy"
     ]
     if 'last_selected_tab' not in st.session_state:
@@ -1096,84 +1104,88 @@ def show_image_analysis():
     uploaded_file = st.file_uploader("Upload image", type=['png', 'jpg', 'jpeg'])
     
     if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image")
-        
-        if st.button("Analyze Image"):
-            with st.spinner("Extracting text from image..."):
-                ocr_text, error = ocr_space_file(image)
-                if error:
-                    st.error(f"OCR Error: {error}")
-                    return
-                
-                # Use Gemini to analyze the extracted text
-                with st.spinner("Analyzing with AI..."):
-                    analysis_text, analysis_error = analyze_text_with_gemini(ocr_text, image_type.lower())
+        try:
+            compressed = compress_image(uploaded_file)
+            image = Image.open(compressed)
+            st.image(image, caption="Uploaded Image")
+            
+            if st.button("Analyze Image"):
+                with st.spinner("Extracting text from image..."):
+                    ocr_text, error = ocr_space_file(compressed)
+                    if error:
+                        st.error(f"OCR Error: {error}")
+                        return
                     
-                    if analysis_error:
-                        st.error(f"Analysis Error: {analysis_error}")
-                    else:
-                        st.subheader("🔬 AI Analysis Results")
-                        st.markdown(analysis_text)
-                
-                # Parse nutrition facts for logging (if nutrition facts table)
-                if image_type == "Nutrition Facts Table":
-                    facts = parse_nutrition_facts_from_text(ocr_text)
-                    if facts:
-                        st.subheader("📊 Parsed Nutrition Information")
-                        col1, col2, col3, col4 = st.columns(4)
-                        with col1:
-                            st.metric("Calories", f"{facts.get('calories', 0):.0f} kcal")
-                        with col2:
-                            st.metric("Protein", f"{facts.get('protein_g', 0):.1f}g")
-                        with col3:
-                            st.metric("Carbs", f"{facts.get('carbohydrates_total_g', 0):.1f}g")
-                        with col4:
-                            st.metric("Fat", f"{facts.get('fat_total_g', 0):.1f}g")
+                    # Use Gemini to analyze the extracted text
+                    with st.spinner("Analyzing with AI..."):
+                        analysis_text, analysis_error = analyze_text_with_gemini(ocr_text, image_type.lower())
                         
-                        if facts.get('serving_size'):
-                            st.write(f"**Serving Size:** {facts['serving_size']}")
-                        if facts.get('fiber_g'):
-                            st.write(f"**Fiber:** {facts['fiber_g']:.1f}g")
-                        if facts.get('sugar_g'):
-                            st.write(f"**Sugar:** {facts['sugar_g']:.1f}g")
-                        if facts.get('sodium_mg'):
-                            st.write(f"**Sodium:** {facts['sodium_mg']:.0f}mg")
-                        
-                        # Option to log nutrition facts
-                        if st.button("Log Nutrition Facts to Daily Tracker"):
-                            food_data = {
-                                'food_name': 'Extracted Food',
-                                'nf_calories': facts.get('calories', 0),
-                                'nf_protein': facts.get('protein_g', 0),
-                                'nf_total_carbohydrate': facts.get('carbohydrates_total_g', 0),
-                                'nf_total_fat': facts.get('fat_total_g', 0),
-                                'nf_dietary_fiber': facts.get('fiber_g', 0),
-                                'nf_sugars': facts.get('sugar_g', 0),
-                                'serving_size': facts.get('serving_size', '100g')
-                            }
-                            meal_type = st.selectbox("Select meal type:", ["Breakfast", "Lunch", "Dinner", "Snack"], key="image_meal_type")
-                            if st.button("Add to Daily Log", key="add_image_nutrition"):
-                                log_nutrition(st.session_state.user_id, food_data, meal_type)
-                                st.success(f"Added {food_data['food_name']} to your daily log!")
-                    else:
-                        st.info("Could not parse nutrition facts from the extracted text.")
-                
-                else:  # Ingredients List
-                    ingredients = parse_ingredients_from_text(ocr_text)
-                    if ingredients:
-                        st.subheader("🧾 Parsed Ingredients")
-                        for ingredient in ingredients:
-                            st.write(f"• {ingredient}")
-                    else:
-                        st.info("Could not parse ingredients from the extracted text.")
-                
-                # Log the analysis (OCR text + AI analysis)
-                log_image_analysis(st.session_state.user_id, image_type, f"OCR Text: {ocr_text}\n\nAI Analysis: {analysis_text if analysis_text else 'Analysis failed'}", None)
-                st.success("Analysis logged to your timeline!")
+                        if analysis_error:
+                            st.error(f"Analysis Error: {analysis_error}")
+                        else:
+                            st.subheader("🔬 AI Analysis Results")
+                            st.markdown(analysis_text)
+                    
+                    # Parse nutrition facts for logging (if nutrition facts table)
+                    if image_type == "Nutrition Facts Table":
+                        facts = parse_nutrition_facts_from_text(ocr_text)
+                        if facts:
+                            st.subheader("📊 Parsed Nutrition Information")
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Calories", f"{facts.get('calories', 0):.0f} kcal")
+                            with col2:
+                                st.metric("Protein", f"{facts.get('protein_g', 0):.1f}g")
+                            with col3:
+                                st.metric("Carbs", f"{facts.get('carbohydrates_total_g', 0):.1f}g")
+                            with col4:
+                                st.metric("Fat", f"{facts.get('fat_total_g', 0):.1f}g")
+                            
+                            if facts.get('serving_size'):
+                                st.write(f"**Serving Size:** {facts['serving_size']}")
+                            if facts.get('fiber_g'):
+                                st.write(f"**Fiber:** {facts['fiber_g']:.1f}g")
+                            if facts.get('sugar_g'):
+                                st.write(f"**Sugar:** {facts['sugar_g']:.1f}g")
+                            if facts.get('sodium_mg'):
+                                st.write(f"**Sodium:** {facts['sodium_mg']:.0f}mg")
+                            
+                            # Option to log nutrition facts
+                            if st.button("Log Nutrition Facts to Daily Tracker"):
+                                food_data = {
+                                    'food_name': 'Extracted Food',
+                                    'nf_calories': facts.get('calories', 0),
+                                    'nf_protein': facts.get('protein_g', 0),
+                                    'nf_total_carbohydrate': facts.get('carbohydrates_total_g', 0),
+                                    'nf_total_fat': facts.get('fat_total_g', 0),
+                                    'nf_dietary_fiber': facts.get('fiber_g', 0),
+                                    'nf_sugars': facts.get('sugar_g', 0),
+                                    'serving_size': facts.get('serving_size', '100g')
+                                }
+                                meal_type = st.selectbox("Select meal type:", ["Breakfast", "Lunch", "Dinner", "Snack"], key="image_meal_type")
+                                if st.button("Add to Daily Log", key="add_image_nutrition"):
+                                    log_nutrition(st.session_state.user_id, food_data, meal_type)
+                                    st.success(f"Added {food_data['food_name']} to your daily log!")
+                        else:
+                            st.info("Could not parse nutrition facts from the extracted text.")
+                    
+                    else:  # Ingredients List
+                        ingredients = parse_ingredients_from_text(ocr_text)
+                        if ingredients:
+                            st.subheader("🧾 Parsed Ingredients")
+                            for ingredient in ingredients:
+                                st.write(f"• {ingredient}")
+                        else:
+                            st.info("Could not parse ingredients from the extracted text.")
+                    
+                    # Log the analysis (OCR text + AI analysis)
+                    log_image_analysis(st.session_state.user_id, image_type, f"OCR Text: {ocr_text}\n\nAI Analysis: {analysis_text if analysis_text else 'Analysis failed'}", None)
+                    st.success("Analysis logged to your timeline!")
+        except MemoryError:
+            st.error("This image is too large to process on your device. Please try a smaller image.")
 
 def show_timeline():
-    st.subheader("🕒 My Food and Activity Story")
+    st.subheader("🕒 My Log Timeline")
     
     # Date range selector
     days = st.selectbox("Show last", [7, 14, 30, 90], index=0)
