@@ -677,7 +677,7 @@ def show_main_interface():
         show_gemini_chat()
 
 def show_dashboard():
-    st.subheader("🏠 SnapShot: Your Day at a Glance")
+    st.subheader("🏠 Your Day at a Glance")
     selected_date = st.date_input(
         "Select Date",
         value=datetime.now().date(),
@@ -840,7 +840,6 @@ def show_dashboard():
         st.info("No activities logged yet. Start tracking your nutrition and exercise!")
 
 def show_health_profile():
-    st.subheader("🧑 My Profile")
     # Get current health data
     health_data = get_user_health(st.session_state.user_id)
     
@@ -1111,10 +1110,8 @@ def show_image_analysis():
             st.success("Analysis logged to your timeline!")
 
 def show_timeline():
-    st.subheader("🕒 My Log Timeline")
-    
     # Date range selector
-    days = st.selectbox("Show last", [7, 14, 30, 90], index=0)
+    days = st.selectbox("Show last", [3, 7, 14, 30, 90], index=0)
     
     # Get timeline data
     nutrition_df, exercise_df = get_user_timeline(st.session_state.user_id, days)
