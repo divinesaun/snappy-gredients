@@ -940,7 +940,7 @@ def show_nutrition_tracker():
             st.session_state.last_food_result = None
 
     # Manual entry
-    st.subheader("Manual Entry")
+    st.subheader("Manual Meal Entry")
     with st.form("manual_nutrition"):
         food_name = st.text_input("Food Name")
         calories = st.number_input("Calories", min_value=0, value=0)
@@ -950,7 +950,7 @@ def show_nutrition_tracker():
         serving_size = st.text_input("Serving Size", value="100g")
         meal_type = st.selectbox("Meal Type", ["Breakfast", "Lunch", "Dinner", "Snack"])
         
-        if st.form_submit_button("Add Manual Entry"):
+        if st.form_submit_button("Add Meal"):
             food_data = {
                 'food_name': food_name,
                 'nf_calories': calories or 0,
