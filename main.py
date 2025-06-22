@@ -95,67 +95,33 @@ def calories_burned_llm(activity):
         st.error(f"Error calculating calories: {e}")
         return {"exercises": []}
 
-def extract_nutrition_from_image_llm(image, image_type):
-    """Extract nutrition facts from image using LLM with structured output"""
-    try:
-        # Convert image to bytes
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='JPEG')
-        img_byte_arr = img_byte_arr.getvalue()
-        
-        if image_type == "nutrition facts table":
-            prompt = """
-            Analyze this nutrition facts table image and extract the nutrition information in the following JSON format:
-            {
-                "nutrition_facts": {
-                    "food_name": "product name",
-                    "serving_size": "serving size",
-                    "calories": X,
-                    "protein_g": X.X,
-                    "carbohydrates_total_g": X.X,
-                    "fat_total_g": X.X,
-                    "fiber_g": X.X,
-                    "sugar_g": X.X,
-                    "sodium_mg": X.X,
-                    "additional_info": "any other relevant nutrition info"
-                }
-            }
-            
-            Extract all visible nutrition information. If a value is not visible, use 0.
-            Only return valid JSON, no other text.
-            """
-        else:  # ingredients list
-            prompt = """
-            Analyze this ingredients list image and extract nutrition information in the following JSON format:
-            {
-                "nutrition_facts": {
-                    "food_name": "product name",
-                    "ingredients": ["ingredient1", "ingredient2", ...],
-                    "estimated_calories": X,
-                    "estimated_protein_g": X.X,
-                    "estimated_carbohydrates_total_g": X.X,
-                    "estimated_fat_total_g": X.X,
-                    "allergens": ["allergen1", "allergen2", ...],
-                    "health_notes": "health implications and recommendations"
-                }
-            }
-            
-            Estimate nutrition based on ingredients. If exact values aren't visible, provide reasonable estimates.
-            Only return valid JSON, no other text.
-            """
-        
-        # Generate response using Gemini
-        response = model.generate_content([prompt, {"mime_type": "image/jpeg", "data": img_byte_arr}])
-        
-        # Extract JSON from response
-        import re
-        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group())
-        else:
-            return {"nutrition_facts": {}}
-    except Exception as e:
-        return {"nutrition_facts": {}, "error": str(e)}
+def extract_nutrition_facts_llm(ocr_text):
+    """Use Gemini LLM to extract nutrition facts from OCR text and return as dict."""
+    prompt = f"""
+    You are a nutrition label parser. Given the following OCR text from a nutrition label, extract the nutrition facts in this JSON format:
+    {{
+        "food_name": "Product name if available",
+        "serving_size": "serving size",
+        "calories": X,
+        "protein_g": X.X,
+        "carbohydrates_total_g": X.X,
+        "fat_total_g": X.X,
+        "fiber_g": X.X,
+        "sugar_g": X.X,
+        "sodium_mg": X.X
+    }}
+    Only return valid JSON, no other text.
+
+    OCR text:
+    {ocr_text}
+    """
+    response = model.generate_content(prompt)
+    import re, json
+    json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group())
+    else:
+        return {}
 
 # Keep the old functions for backward compatibility but mark as deprecated
 def find_food(query):
@@ -512,7 +478,14 @@ def ocr_space_file(image_data, api_key=None, language='eng'):
     if not api_key:
         return None, "OCR Space API key is not configured. Please check your environment variables."
     url = 'https://api.ocr.space/parse/image'
-    def compress_image_to_size(image, max_size_mb=1):
+    def compress_image_to_size(image_data, max_size_mb=1):
+        # Always ensure we have a PIL.Image
+        if not isinstance(image_data, Image.Image):
+            image_data.seek(0)
+            image = Image.open(image_data)
+        else:
+            image = image_data
+        # Now you can safely use image.mode, etc.
         if image.mode == 'RGBA':
             image = image.convert('RGB')
         quality = 95
@@ -569,43 +542,6 @@ def ocr_space_file(image_data, api_key=None, language='eng'):
     except Exception as e:
         return None, f"Error processing image: {str(e)}"
 
-def parse_nutrition_facts_from_text(text):
-    """Parse nutrition facts from OCR text. Returns a dict with keys: calories, protein_g, carbohydrates_total_g, fat_total_g, fiber_g, sugar_g, sodium_mg, serving_size."""
-    import re
-    facts = {}
-    # Try to find serving size
-    serving_match = re.search(r'Serving Size:?\s*([\w\d .]+)', text, re.IGNORECASE)
-    if serving_match:
-        facts['serving_size'] = serving_match.group(1).strip()
-    # Calories
-    cal_match = re.search(r'Calories:?\s*(\d+)', text, re.IGNORECASE)
-    if cal_match:
-        facts['calories'] = int(cal_match.group(1))
-    # Protein
-    protein_match = re.search(r'Protein:?\s*(\d+(?:\.\d+)?)\s*g', text, re.IGNORECASE)
-    if protein_match:
-        facts['protein_g'] = float(protein_match.group(1))
-    # Carbs
-    carbs_match = re.search(r'Carbohydrate[s]?:?\s*(\d+(?:\.\d+)?)\s*g', text, re.IGNORECASE)
-    if carbs_match:
-        facts['carbohydrates_total_g'] = float(carbs_match.group(1))
-    # Fat
-    fat_match = re.search(r'Fat:?\s*(\d+(?:\.\d+)?)\s*g', text, re.IGNORECASE)
-    if fat_match:
-        facts['fat_total_g'] = float(fat_match.group(1))
-    # Fiber
-    fiber_match = re.search(r'Fiber:?\s*(\d+(?:\.\d+)?)\s*g', text, re.IGNORECASE)
-    if fiber_match:
-        facts['fiber_g'] = float(fiber_match.group(1))
-    # Sugar
-    sugar_match = re.search(r'Sugar[s]?:?\s*(\d+(?:\.\d+)?)\s*g', text, re.IGNORECASE)
-    if sugar_match:
-        facts['sugar_g'] = float(sugar_match.group(1))
-    # Sodium
-    sodium_match = re.search(r'Sodium:?\s*(\d+(?:\.\d+)?)\s*mg', text, re.IGNORECASE)
-    if sodium_match:
-        facts['sodium_mg'] = float(sodium_match.group(1))
-    return facts
 
 def parse_ingredients_from_text(text):
     """Parse ingredients from OCR text. Returns a list of ingredients if found."""
@@ -620,11 +556,22 @@ def parse_ingredients_from_text(text):
 
 def compress_image(image_file, max_size=(800, 800), quality=70):
     image = Image.open(image_file)
+    if image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
     image.thumbnail(max_size)
     buf = io.BytesIO()
     image.save(buf, format='JPEG', quality=quality, optimize=True)
     buf.seek(0)
     return buf
+
+def safe_float(val, default=0.0):
+    """Convert val to float, or return default if None or invalid."""
+    try:
+        if val is None:
+            return default
+        return float(val)
+    except (TypeError, ValueError):
+        return default
 
 # Initialize database
 init_database()
@@ -1104,85 +1051,67 @@ def show_image_analysis():
     uploaded_file = st.file_uploader("Upload image", type=['png', 'jpg', 'jpeg'])
     
     if uploaded_file is not None:
-        try:
-            compressed = compress_image(uploaded_file)
-            image = Image.open(compressed)
-            st.image(image, caption="Uploaded Image")
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image")
+        if st.button("Analyze Image"):
+            # OCR extraction
+            ocr_text, error = ocr_space_file(image)
+            if error:
+                st.error(f"OCR Error: {error}")
+                return
+            # Use Gemini LLM to extract nutrition facts (always use correct prompt)
+            facts = extract_nutrition_facts_llm(ocr_text)
+            if facts:
+                st.subheader("📊 Parsed Nutrition Information")
+                # Stylized nutrition table
+                table_data = {
+                    "Metric": [
+                        "Food Name", "Serving Size", "Calories", "Protein (g)", "Carbs (g)", "Fat (g)", "Fiber (g)", "Sugar (g)", "Sodium (mg)"
+                    ],
+                    "Value": [
+                        facts.get("food_name", ""),
+                        facts.get("serving_size", ""),
+                        f"{safe_float(facts.get('calories')):.0f}",
+                        f"{safe_float(facts.get('protein_g')):.1f}",
+                        f"{safe_float(facts.get('carbohydrates_total_g')):.1f}",
+                        f"{safe_float(facts.get('fat_total_g')):.1f}",
+                        f"{safe_float(facts.get('fiber_g')):.1f}",
+                        f"{safe_float(facts.get('sugar_g')):.1f}",
+                        f"{safe_float(facts.get('sodium_mg')):.0f}"
+                    ]
+                }
+                st.dataframe(
+                    pd.DataFrame(table_data),
+                    hide_index=True,
+                    use_container_width=True,
+                    column_config={
+                        "Metric": st.column_config.TextColumn("Metric", width="medium"),
+                        "Value": st.column_config.TextColumn("Value", width="medium")
+                    }
+                )
+               
+                # Option to log nutrition facts
+                if st.button("Log Nutrition Facts to Daily Tracker"):
+                    food_data = {
+                        'food_name': 'Extracted Food',
+                        'nf_calories': facts.get('calories', 0),
+                        'nf_protein': facts.get('protein_g', 0),
+                        'nf_total_carbohydrate': facts.get('carbohydrates_total_g', 0),
+                        'nf_total_fat': facts.get('fat_total_g', 0),
+                        'nf_dietary_fiber': facts.get('fiber_g', 0),
+                        'nf_sugars': facts.get('sugar_g', 0),
+                        'serving_size': facts.get('serving_size', '100g')
+                    }
+                    meal_type = st.selectbox("Select meal type:", ["Breakfast", "Lunch", "Dinner", "Snack"], key="image_meal_type")
+                    if st.button("Add to Daily Log", key="add_image_nutrition"):
+                        log_nutrition(st.session_state.user_id, food_data, meal_type)
+                        st.success(f"Added {food_data['food_name']} to your daily log!")
+            else:
+                st.info("Could not parse nutrition facts from the extracted text.")
             
-            if st.button("Analyze Image"):
-                with st.spinner("Extracting text from image..."):
-                    ocr_text, error = ocr_space_file(compressed)
-                    if error:
-                        st.error(f"OCR Error: {error}")
-                        return
-                    
-                    # Use Gemini to analyze the extracted text
-                    with st.spinner("Analyzing with AI..."):
-                        analysis_text, analysis_error = analyze_text_with_gemini(ocr_text, image_type.lower())
-                        
-                        if analysis_error:
-                            st.error(f"Analysis Error: {analysis_error}")
-                        else:
-                            st.subheader("🔬 AI Analysis Results")
-                            st.markdown(analysis_text)
-                    
-                    # Parse nutrition facts for logging (if nutrition facts table)
-                    if image_type == "Nutrition Facts Table":
-                        facts = parse_nutrition_facts_from_text(ocr_text)
-                        if facts:
-                            st.subheader("📊 Parsed Nutrition Information")
-                            col1, col2, col3, col4 = st.columns(4)
-                            with col1:
-                                st.metric("Calories", f"{facts.get('calories', 0):.0f} kcal")
-                            with col2:
-                                st.metric("Protein", f"{facts.get('protein_g', 0):.1f}g")
-                            with col3:
-                                st.metric("Carbs", f"{facts.get('carbohydrates_total_g', 0):.1f}g")
-                            with col4:
-                                st.metric("Fat", f"{facts.get('fat_total_g', 0):.1f}g")
-                            
-                            if facts.get('serving_size'):
-                                st.write(f"**Serving Size:** {facts['serving_size']}")
-                            if facts.get('fiber_g'):
-                                st.write(f"**Fiber:** {facts['fiber_g']:.1f}g")
-                            if facts.get('sugar_g'):
-                                st.write(f"**Sugar:** {facts['sugar_g']:.1f}g")
-                            if facts.get('sodium_mg'):
-                                st.write(f"**Sodium:** {facts['sodium_mg']:.0f}mg")
-                            
-                            # Option to log nutrition facts
-                            if st.button("Log Nutrition Facts to Daily Tracker"):
-                                food_data = {
-                                    'food_name': 'Extracted Food',
-                                    'nf_calories': facts.get('calories', 0),
-                                    'nf_protein': facts.get('protein_g', 0),
-                                    'nf_total_carbohydrate': facts.get('carbohydrates_total_g', 0),
-                                    'nf_total_fat': facts.get('fat_total_g', 0),
-                                    'nf_dietary_fiber': facts.get('fiber_g', 0),
-                                    'nf_sugars': facts.get('sugar_g', 0),
-                                    'serving_size': facts.get('serving_size', '100g')
-                                }
-                                meal_type = st.selectbox("Select meal type:", ["Breakfast", "Lunch", "Dinner", "Snack"], key="image_meal_type")
-                                if st.button("Add to Daily Log", key="add_image_nutrition"):
-                                    log_nutrition(st.session_state.user_id, food_data, meal_type)
-                                    st.success(f"Added {food_data['food_name']} to your daily log!")
-                        else:
-                            st.info("Could not parse nutrition facts from the extracted text.")
-                    
-                    else:  # Ingredients List
-                        ingredients = parse_ingredients_from_text(ocr_text)
-                        if ingredients:
-                            st.subheader("🧾 Parsed Ingredients")
-                            for ingredient in ingredients:
-                                st.write(f"• {ingredient}")
-                        else:
-                            st.info("Could not parse ingredients from the extracted text.")
-                    
-                    # Log the analysis (OCR text + AI analysis)
-                    log_image_analysis(st.session_state.user_id, image_type, f"OCR Text: {ocr_text}\n\nAI Analysis: {analysis_text if analysis_text else 'Analysis failed'}", None)
-                    st.success("Analysis logged to your timeline!")
-        except MemoryError:
-            st.error("This image is too large to process on your device. Please try a smaller image.")
+            # Log the analysis (OCR text + AI analysis)
+            log_image_analysis(st.session_state.user_id, image_type, f"OCR Text: {ocr_text}\n\nAI Analysis: {ocr_text}", None)
+            st.success("Analysis logged to your timeline!")
 
 def show_timeline():
     st.subheader("🕒 My Log Timeline")
@@ -1263,7 +1192,7 @@ def show_gemini_chat():
     # --- System prompt for Gemini ---
     system_prompt = (
         f"You are Snappy, a friendly, expert exercise and nutrition coach. "
-        f"Give short, organized responses. You can use markdown formatting (including tables, lists, bold, etc.) to make your responses more human readable and intuitive. "
+        f"Give short, organized responses. You can use markdown to make your responses more human readable and intuitive. "
         f"Here is the user's health profile: {health_profile_str}\n"
         f"Today's nutrition summary: {nutrition_str}\n"
         f"Today's exercise summary: {exercise_str}\n"
