@@ -860,7 +860,6 @@ def show_health_profile():
             st.success("Health profile updated!")
 
 def show_nutrition_tracker():
-    st.subheader("🍔 Quick Bite Log")
     st.subheader("Add a Bite!")
 
     # --- LLM Food Search State ---
@@ -965,7 +964,6 @@ def show_nutrition_tracker():
             st.success("Manual entry added!")
 
 def show_exercise_tracker():
-    st.subheader("💪 Move & Burn")
     st.subheader("Track Your Moves!")
     # --- LLM Exercise Search State ---
     if 'last_exercise_result' not in st.session_state:
