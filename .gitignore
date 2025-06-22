@@ -1,3 +1,6 @@
 /.env
 /example.png
 /venv
+/health_tracker.db
+/backup.py
+/chat.py
