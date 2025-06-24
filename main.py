@@ -644,21 +644,6 @@ def show_main_interface():
         st.session_state.user_id = None
         st.session_state.username = None
         st.rerun()
-        
-    # --- Admin feature: Download database ---
-    if st.session_state.username == "rerun":
-        st.sidebar.subheader("Admin Controls")
-        try:
-            with open("health_tracker.db", "rb") as fp:
-                st.sidebar.download_button(
-                    label="Download Database",
-                    data=fp,
-                    file_name="health_tracker.db",
-                    mime="application/octet-stream"
-                )
-        except FileNotFoundError:
-            st.sidebar.error("Database file not found.")
-
     # --- Track last selected tab to force dashboard refresh ---
     tab_labels = [
         "🏠 SnapShot (Dashboard)",
